@@ -6,6 +6,9 @@ backend/.env
 frontend/.env
 frontend/.env.local
 
+# Generated files
+frontend/config.js
+
 # Database (will be generated)
 data/otc.db
 data/otc.db-wal

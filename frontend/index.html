@@ -810,16 +810,38 @@
     <script>
       // ── Configuration ────────────────────────────────────────────────────────────
       // ── API Configuration ───────────────────────────────────────────────────
-      // Use environment variable from .env or Vercel deployment
-      // Priority: window.__CONFIG__ (from config.js) → localhost fallback
-      let API_BASE =
-        window.__CONFIG__?.api_base ||
-        `http://${window.location.hostname}:8000`;
+      // Use environment variable from config.js (set by Vercel build or local .env)
+      let API_BASE = null;
+
+      // Try to get API_BASE from window.__CONFIG__ (injected by config.js)
+      if (window.__CONFIG__ && window.__CONFIG__.api_base) {
+        API_BASE = window.__CONFIG__.api_base;
+        console.log("✓ API_BASE from config.js:", API_BASE);
+      } else {
+        // For local development
+        if (
+          window.location.hostname === "localhost" ||
+          window.location.hostname === "127.0.0.1"
+        ) {
+          API_BASE = `http://${window.location.hostname}:8000`;
+          console.log("⚠️ Using local development API_BASE:", API_BASE);
+        } else {
+          // Production Vercel - this shouldn't happen if config.js loads
+          console.warn(
+            "❌ window.__CONFIG__ not found! config.js may not have loaded.",
+          );
+          console.warn(
+            "  If you see this, check browser console for config.js errors.",
+          );
+          API_BASE = window.location.protocol + "//" + window.location.host; // Fallback (likely incorrect)
+        }
+      }
 
       console.log("🔍 API Configuration:");
-      console.log("  Config loaded:", window.__CONFIG__);
+      console.log("  window.__CONFIG__:", window.__CONFIG__);
       console.log("  API_BASE:", API_BASE);
       console.log("  Hostname:", window.location.hostname);
+      console.log("  Protocol:", window.location.protocol);
 
       let graphData = null;
       let simulation = null;
@@ -831,34 +853,81 @@
 
       // ── Init ─────────────────────────────────────────────────────────────────────
       async function init() {
+        if (!API_BASE) {
+          console.error("❌ CRITICAL: API_BASE not configured!");
+          updateLoadingSub(
+            "⚠️ Backend URL not configured. Check browser console.",
+          );
+          return;
+        }
+
         updateLoadingSub("Loading graph data...");
         addWelcomeMessage();
 
         try {
           // Load stats
-          console.log("📊 Fetching stats from:", `${API_BASE}/api/stats`);
-          const statsResp = await fetch(`${API_BASE}/api/stats`);
-          if (!statsResp.ok)
-            throw new Error(`Stats API returned ${statsResp.status}`);
+          const statsUrl = `${API_BASE}/api/stats`;
+          console.log("📊 Fetching stats from:", statsUrl);
+
+          const statsResp = await fetch(statsUrl, {
+            method: "GET",
+            headers: { "Content-Type": "application/json" },
+          });
+
+          console.log("📊 Stats response status:", statsResp.status);
+
+          if (!statsResp.ok) {
+            const errorText = await statsResp.text();
+            throw new Error(
+              `Stats API returned ${statsResp.status}: ${errorText}`,
+            );
+          }
+
           const stats = await statsResp.json();
+          console.log("✓ Stats loaded:", stats);
           renderStatsBar(stats);
 
           // Load graph
           updateLoadingSub("Building force graph...");
-          console.log("📈 Fetching graph from:", `${API_BASE}/api/graph`);
-          const graphResp = await fetch(`${API_BASE}/api/graph`);
-          if (!graphResp.ok)
-            throw new Error(`Graph API returned ${graphResp.status}`);
+          const graphUrl = `${API_BASE}/api/graph`;
+          console.log("📈 Fetching graph from:", graphUrl);
+
+          const graphResp = await fetch(graphUrl, {
+            method: "GET",
+            headers: { "Content-Type": "application/json" },
+          });
+
+          console.log("📈 Graph response status:", graphResp.status);
+
+          if (!graphResp.ok) {
+            const errorText = await graphResp.text();
+            throw new Error(
+              `Graph API returned ${graphResp.status}: ${errorText}`,
+            );
+          }
+
           graphData = await graphResp.json();
+          console.log("✓ Graph loaded:", graphData);
           renderGraph(graphData);
 
           document.getElementById("loadingOverlay").style.display = "none";
         } catch (err) {
           console.error("❌ Init Error:", err);
-          updateLoadingSub(
-            "⚠️ Could not connect to backend. Make sure the server is running on port 8000.",
-          );
-          console.error(err);
+          console.error("   Message:", err.message);
+          console.error("   Stack:", err.stack);
+
+          if (
+            err.message.includes("Failed to fetch") ||
+            err.message.includes("Cannot reach")
+          ) {
+            updateLoadingSub(
+              "⚠️ Could not connect to backend at: " +
+                API_BASE +
+                "\n\nCheck REACT_APP_API_BASE environment variable.",
+            );
+          } else {
+            updateLoadingSub("⚠️ Backend error: " + err.message);
+          }
         }
       }
 
