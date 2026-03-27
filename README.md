@@ -5,8 +5,7 @@
 Jokes / stories
 Weather / politics
 Math queries
-Translation
-2. Domain Check
+Translation 2. Domain Check
 Must include keywords:
 order, delivery, billing, customer, etc.
 Response for Invalid Queries
@@ -19,30 +18,6 @@ Response for Invalid Queries
 | **Database**   | SQLite (auto-initialized)            |
 | **LLM**        | Groq API (llama-3.3-70b)             |
 | **Deployment** | Render (Backend) + Vercel (Frontend) |
-
----
-
-## Project Structure
-
-```
-order-to-cash/
-├── backend/                      # FastAPI application
-│   ├── main.py                  # API endpoints
-│   ├── database.py              # SQLite schema
-│   ├── data_processor.py        # PDF loader
-│   ├── graph_builder.py         # NetworkX graph
-│   ├── llm_service.py           # Groq integration
-│   ├── .env                     # Secrets (not in git)
-│   └── data/                    # PDF + database
-├── frontend/                     # Static HTML + D3.js
-│   ├── index.html               # Main UI
-│   ├── config.js                # Environment config
-│   ├── build.js                 # Build script
-│   └── vercel.json              # Vercel config
-├── requirements.txt             # Python dependencies
-├── Dockerfile                   # Backend containerization
-└── README.md                    # This file
-```
 
 ---
 
