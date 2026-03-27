@@ -2,7 +2,14 @@
 
 **Graph-based data modeling & LLM-powered query interface for O2C business processes**
 
----
+Jokes / stories
+Weather / politics
+Math queries
+Translation
+2. Domain Check
+Must include keywords:
+order, delivery, billing, customer, etc.
+Response for Invalid Queries
 
 ## Quick Overview
 
@@ -59,9 +66,11 @@ order-to-cash/
 | `DB_PATH`            | ✅ Required | ❌       | `./data/otc.db`                 |
 | `REACT_APP_API_BASE` | ❌          | ✅ (Dev) | `http://localhost:8000`         |
 
----
+GROQ_API_KEY
+PDF_PATH
+DB_PATH
 
-## API Endpoints
+Frontend
 
 | Endpoint         | Method | Purpose                   |
 | ---------------- | ------ | ------------------------- |
