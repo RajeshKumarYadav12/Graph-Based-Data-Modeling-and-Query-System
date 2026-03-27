@@ -15,17 +15,12 @@ console.log("🔨 Building frontend configuration...");
 console.log("📍 API_BASE:", API_BASE);
 
 // Generate config.js with injected environment variables
-const configContent = `<!-- Environment Configuration - Injected by build process -->
-<script>
-  // Configuration injected at build time
-  if (!window.__CONFIG__) {
-    window.__CONFIG__ = {
-      api_base: '${API_BASE}',
-    };
-  }
-  
-  console.log('✓ Configuration loaded:', window.__CONFIG__);
-</script>
+const configContent = `// Configuration injected at build time
+window.__CONFIG__ = {
+  api_base: '${API_BASE}',
+};
+
+console.log('✓ Configuration loaded:', window.__CONFIG__);
 `;
 
 // Write config.js
