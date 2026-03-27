@@ -15,6 +15,7 @@
 
 ---
 
+
 ## ⚙️ Local Development
 
 ### Setup
@@ -31,6 +32,9 @@ GROQ_API_KEY=your_key
 PDF_PATH=./data/final_full_dataset.pdf
 DB_PATH=./data/otc.db
 REACT_APP_API_BASE=http://localhost:8000
+
+---
+
 🔌 API Endpoints
 Endpoint	Method	Description
 /	GET	Frontend HTML
@@ -38,6 +42,9 @@ Endpoint	Method	Description
 /api/stats	GET	Dataset stats
 /api/query	POST	NL query
 /api/node/{id}	GET	Node details
+
+---
+
 🧠 Data Model
 
 Nodes:
@@ -45,6 +52,8 @@ Customer → SalesOrder → SalesOrderItem → (Delivery, Billing) → JournalEn
 
 Key Entities:
 Customer, SalesOrder, SalesOrderItem, Delivery, DeliveryItem, BillingDoc, BillingItem, JournalEntry, Product
+
+---
 
 🤖 LLM Pipeline
 
@@ -56,6 +65,9 @@ Domain guardrails (O2C keywords only)
 Conversation memory (8 messages)
 Dynamic model selection
 Natural language explanations
+
+---
+
 🛡️ Guardrails
 
 Blocked:
@@ -63,6 +75,8 @@ Jokes, weather, politics, math, translation
 
 Allowed:
 Keywords required → order, delivery, billing, customer, material, product, journal
+
+
 
 🚀 Deployment
 Backend (Render)
@@ -76,18 +90,24 @@ Import GitHub repo
 Root Directory: frontend
 Set REACT_APP_API_BASE to Render URL
 Deploy
+
+
 📝 Example Queries
 Show all customers
 Top sales orders by amount
 Trace billing document 90504298
 Products with most billing docs
 Customers with incomplete deliveries
+
+
 📁 Project Structure
 backend/           # FastAPI / SQLite
 frontend/          # D3.js visualization
 data/              # PDF + database
 Dockerfile         # Docker config
 requirements.txt   # Dependencies
+
+
 🐳 Docker
 docker compose up
 docker build -t order-to-cash .
@@ -99,6 +119,9 @@ Node highlighting for results
 Conversation memory (8 messages)
 SQL transparency
 Zoom, pan, drag controls
+
+
+
 📊 Architecture Decisions
 
 SQLite
@@ -116,6 +139,8 @@ Simplifies deployment and avoids CORS issues
 Vercel + Render
 Decoupled architecture, easy scaling
 
+
+
 🎓 LLM Prompting Strategy
 Two-Call Pipeline
 Generate SQL using schema + prompt
@@ -123,9 +148,13 @@ Convert results into natural language answer
 Guardrails
 Regex-based filtering
 Keyword validation (O2C domain only)
+
+
 📜 License
 
 Educational & business use only
+
+
 
 📊 Query Examples
 Query	Returns
@@ -134,6 +163,8 @@ Top 5 sales orders by amount	Ranked orders
 Trace billing document 90504298	Full O2C flow
 Products with most billing docs	Ranked products
 Customers with incomplete deliveries	Filtered list
+
+
 ✅ Pre-Deploy Checklist
 Code pushed to GitHub
 backend/.env created (not committed)
@@ -142,12 +173,16 @@ requirements.txt updated
 .gitignore configured
 API endpoints working
 Frontend loads locally
+
+
 🛠️ Support
 Issue	Solution
 Connection error	Check REACT_APP_API_BASE
 Slow startup	Expected on free tier
 PDF not loading	Verify dataset path
 CORS issues	Configure backend properly
+
+
 📁 Full Project Structure
 order-to-cash/
 ├── backend/
@@ -163,10 +198,13 @@ order-to-cash/
 ├── .env
 ├── run.sh
 └── README.md
+
+
 🚀 Status
 
 Ready for Production
 Stack: FastAPI + D3.js + SQLite + Groq
+
 
 ⭐ Bonus Features
 Natural language → SQL conversion
