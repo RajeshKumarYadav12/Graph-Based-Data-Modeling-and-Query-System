@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - PDF_PATH=./data/final_full_dataset.pdf
+      - DB_PATH=./data/otc.db
+      - GROQ_API_KEY=${GROQ_API_KEY}
+    volumes:
+      - ./backend/data:/app/backend/data
+    restart: unless-stopped

@@ -1,0 +1,24 @@
+# Environment
+.env
+.env.local
+.env.*.local
+backend/.env
+frontend/.env
+frontend/.env.local
+
+# Database (will be generated)
+data/otc.db
+data/otc.db-wal
+data/otc.db-shm
+backend/data/otc.db
+backend/data/otc.db-wal
+backend/data/otc.db-shm
+
+# Temporary files
+*.tmp
+*.log
+*.pid
+
+# OS
+Thumbs.db
+.DS_Store

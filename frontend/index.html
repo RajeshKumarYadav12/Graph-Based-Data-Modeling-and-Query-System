@@ -1,0 +1,1471 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mapping / Order to Cash</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <!-- Load configuration from environment variables -->
+    <script src="config.js"></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: #f5f5f5;
+        height: 100vh;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+
+      /* ── Top Nav Bar ── */
+      .topbar {
+        height: 48px;
+        background: #fff;
+        border-bottom: 1px solid #e5e7eb;
+        display: flex;
+        align-items: center;
+        padding: 0 16px;
+        gap: 8px;
+        flex-shrink: 0;
+        z-index: 100;
+      }
+      .topbar-toggle {
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        border-radius: 6px;
+        color: #6b7280;
+        transition: background 0.15s;
+      }
+      .topbar-toggle:hover {
+        background: #f3f4f6;
+      }
+      .topbar-breadcrumb {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 15px;
+        color: #6b7280;
+      }
+      .topbar-breadcrumb .sep {
+        color: #d1d5db;
+      }
+      .topbar-breadcrumb .current {
+        color: #111827;
+        font-weight: 500;
+      }
+
+      /* ── Main Layout ── */
+      .main {
+        flex: 1;
+        display: flex;
+        overflow: hidden;
+        gap: 0;
+      }
+
+      /* ── Graph Panel ── */
+      .graph-panel {
+        flex: 1;
+        position: relative;
+        background: #f5f5f5;
+        overflow: hidden;
+      }
+
+      .graph-panel.minimized {
+        flex: 0 0 auto;
+        height: 280px;
+        overflow-y: auto;
+        overflow-x: hidden;
+        border-right: 1px solid #e5e7eb;
+      }
+
+      .graph-panel.minimized #graph-svg {
+        height: 500px;
+        width: 100%;
+      }
+
+      .graph-panel.minimized .graph-controls {
+        position: sticky;
+        top: 0;
+        background: #f5f5f5;
+        padding-bottom: 8px;
+        z-index: 30;
+      }
+
+      .graph-panel.maximized {
+        flex: 1 !important;
+        height: 100% !important;
+        overflow: hidden !important;
+      }
+
+      .graph-panel.maximized #graph-svg {
+        height: 100%;
+        width: 100%;
+      }
+
+      .graph-panel.maximized .graph-controls {
+        position: absolute;
+        top: 14px;
+        left: 14px;
+      }
+
+      /* ── Graph Controls ── */
+      .graph-controls {
+        position: absolute;
+        top: 14px;
+        left: 14px;
+        display: flex;
+        gap: 8px;
+        z-index: 50;
+      }
+      .ctrl-btn {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 14px;
+        border-radius: 6px;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        border: none;
+        transition: all 0.15s;
+      }
+      .ctrl-btn.light {
+        background: rgba(255, 255, 255, 0.9);
+        border: 1px solid #e5e7eb;
+        color: #374151;
+        backdrop-filter: blur(4px);
+      }
+      .ctrl-btn.light:hover {
+        background: #fff;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      }
+      .ctrl-btn.dark {
+        background: rgba(17, 24, 39, 0.85);
+        color: #fff;
+        backdrop-filter: blur(4px);
+      }
+      .ctrl-btn.dark:hover {
+        background: rgba(17, 24, 39, 0.95);
+      }
+
+      /* ── Legend ── */
+      .legend {
+        position: absolute;
+        bottom: 20px;
+        left: 14px;
+        background: rgba(255, 255, 255, 0.92);
+        backdrop-filter: blur(4px);
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        padding: 12px 16px;
+        z-index: 50;
+        font-size: 12px;
+      }
+      .legend-title {
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 8px;
+      }
+      .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 5px;
+        color: #6b7280;
+      }
+      .legend-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        flex-shrink: 0;
+      }
+
+      /* ── Stats bar ── */
+      .stats-bar {
+        position: absolute;
+        top: 14px;
+        right: 14px;
+        display: flex;
+        gap: 10px;
+        z-index: 50;
+      }
+      .stat-pill {
+        background: rgba(255, 255, 255, 0.9);
+        border: 1px solid #e5e7eb;
+        border-radius: 20px;
+        padding: 4px 12px;
+        font-size: 12px;
+        color: #6b7280;
+        font-weight: 500;
+        backdrop-filter: blur(4px);
+      }
+      .stat-pill span {
+        color: #111827;
+      }
+
+      /* ── SVG Graph ── */
+      #graph-svg {
+        width: 100%;
+        height: 100%;
+      }
+      .node circle {
+        stroke-width: 1.5;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      .node circle:hover {
+        stroke-width: 3;
+        filter: drop-shadow(0 2px 6px rgba(59, 130, 246, 0.4));
+      }
+      .node.highlighted circle {
+        stroke: #f59e0b !important;
+        stroke-width: 3;
+      }
+      .link {
+        stroke: #93c5fd;
+        stroke-opacity: 0.6;
+        stroke-width: 1;
+        fill: none;
+      }
+
+      /* ── Node Tooltip ── */
+      .node-tooltip {
+        position: absolute;
+        background: #fff;
+        border-radius: 12px;
+        box-shadow:
+          0 8px 32px rgba(0, 0, 0, 0.18),
+          0 2px 8px rgba(0, 0, 0, 0.08);
+        padding: 18px 20px;
+        min-width: 280px;
+        max-width: 340px;
+        z-index: 1000;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.15s;
+        font-size: 13px;
+      }
+      .node-tooltip.visible {
+        opacity: 1;
+        pointer-events: all;
+      }
+      .tooltip-title {
+        font-size: 16px;
+        font-weight: 700;
+        color: #111827;
+        margin-bottom: 12px;
+      }
+      .tooltip-row {
+        display: flex;
+        margin-bottom: 4px;
+        line-height: 1.5;
+      }
+      .tooltip-key {
+        font-weight: 600;
+        color: #111827;
+        min-width: 120px;
+        flex-shrink: 0;
+        font-size: 12.5px;
+      }
+      .tooltip-val {
+        color: #374151;
+        font-size: 12.5px;
+        word-break: break-all;
+      }
+      .tooltip-hidden {
+        color: #9ca3af;
+        font-style: italic;
+        font-size: 12px;
+        margin-top: 8px;
+        margin-bottom: 4px;
+      }
+      .tooltip-connections {
+        font-weight: 600;
+        color: #111827;
+        margin-top: 4px;
+        font-size: 12.5px;
+      }
+      .tooltip-close {
+        position: absolute;
+        top: 12px;
+        right: 14px;
+        background: none;
+        border: none;
+        font-size: 18px;
+        cursor: pointer;
+        color: #9ca3af;
+        line-height: 1;
+        pointer-events: all;
+      }
+      .tooltip-close:hover {
+        color: #374151;
+      }
+
+      /* ── Chat Panel ── */
+      .chat-panel {
+        width: 360px;
+        min-width: 340px;
+        background: #fff;
+        border-left: 1px solid #e5e7eb;
+        display: flex;
+        flex-direction: column;
+        flex-shrink: 0;
+        z-index: 10;
+      }
+
+      .chat-panel.chat-hidden {
+        display: none;
+      }
+
+      /* Chat Header */
+      .chat-header {
+        padding: 16px 18px;
+        border-bottom: 1px solid #f3f4f6;
+      }
+      .chat-header-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: #111827;
+      }
+      .chat-header-sub {
+        font-size: 12px;
+        color: #9ca3af;
+        margin-top: 1px;
+      }
+
+      /* Agent Header */
+      .agent-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 14px 18px;
+        border-bottom: 1px solid #f3f4f6;
+      }
+      .agent-avatar {
+        width: 38px;
+        height: 38px;
+        background: #111827;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 15px;
+        font-weight: 700;
+        color: #fff;
+        flex-shrink: 0;
+      }
+      .agent-name {
+        font-size: 14px;
+        font-weight: 600;
+        color: #111827;
+      }
+      .agent-role {
+        font-size: 12px;
+        color: #9ca3af;
+      }
+
+      /* Chat Messages */
+      .chat-messages {
+        flex: 1;
+        overflow-y: auto;
+        padding: 16px 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        scroll-behavior: smooth;
+      }
+      .chat-messages::-webkit-scrollbar {
+        width: 4px;
+      }
+      .chat-messages::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .chat-messages::-webkit-scrollbar-thumb {
+        background: #e5e7eb;
+        border-radius: 4px;
+      }
+
+      /* Message bubbles */
+      .msg {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .msg.user {
+        align-items: flex-end;
+      }
+      .msg.agent {
+        align-items: flex-start;
+      }
+
+      .msg-header {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .msg-header.user {
+        justify-content: flex-end;
+        color: #6b7280;
+      }
+      .msg-header.agent {
+        color: #374151;
+      }
+      .msg-avatar-sm {
+        width: 26px;
+        height: 26px;
+        background: #111827;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 700;
+        color: #fff;
+      }
+      .msg-avatar-user {
+        width: 26px;
+        height: 26px;
+        background: #d1d5db;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        color: #6b7280;
+      }
+
+      .msg-bubble {
+        padding: 10px 14px;
+        border-radius: 12px;
+        max-width: 92%;
+        font-size: 13.5px;
+        line-height: 1.55;
+      }
+      .msg.user .msg-bubble {
+        background: #111827;
+        color: #fff;
+        border-bottom-right-radius: 4px;
+      }
+      .msg.agent .msg-bubble {
+        background: #f9fafb;
+        color: #111827;
+        border-bottom-left-radius: 4px;
+        border: 1px solid #f3f4f6;
+      }
+      .msg-bubble strong {
+        font-weight: 700;
+      }
+
+      /* SQL snippet in message */
+      .sql-snippet {
+        margin-top: 8px;
+        background: #1e293b;
+        color: #93c5fd;
+        padding: 8px 12px;
+        border-radius: 6px;
+        font-family: "SF Mono", Monaco, monospace;
+        font-size: 11px;
+        overflow-x: auto;
+        white-space: pre-wrap;
+        word-break: break-all;
+        line-height: 1.5;
+      }
+
+      /* Typing indicator */
+      .typing {
+        display: flex;
+        gap: 4px;
+        align-items: center;
+        padding: 10px 14px;
+        background: #f9fafb;
+        border: 1px solid #f3f4f6;
+        border-radius: 12px;
+        border-bottom-left-radius: 4px;
+        width: fit-content;
+      }
+      .dot {
+        width: 6px;
+        height: 6px;
+        background: #9ca3af;
+        border-radius: 50%;
+        animation: bounce 1.4s infinite;
+      }
+      .dot:nth-child(2) {
+        animation-delay: 0.2s;
+      }
+      .dot:nth-child(3) {
+        animation-delay: 0.4s;
+      }
+      @keyframes bounce {
+        0%,
+        80%,
+        100% {
+          transform: translateY(0);
+        }
+        40% {
+          transform: translateY(-6px);
+        }
+      }
+
+      /* Chat Footer */
+      .chat-footer {
+        border-top: 1px solid #f3f4f6;
+        padding: 12px 18px;
+      }
+      .status-row {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 12px;
+        color: #374151;
+        margin-bottom: 8px;
+      }
+      .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #22c55e;
+        box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.2);
+      }
+      .input-row {
+        display: flex;
+        gap: 8px;
+        align-items: flex-end;
+      }
+      .chat-input {
+        flex: 1;
+        padding: 9px 12px;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        font-size: 13.5px;
+        color: #111827;
+        resize: none;
+        min-height: 38px;
+        max-height: 120px;
+        outline: none;
+        font-family: inherit;
+        transition: border-color 0.15s;
+        line-height: 1.4;
+      }
+      .chat-input::placeholder {
+        color: #9ca3af;
+      }
+      .chat-input:focus {
+        border-color: #6b7280;
+      }
+      .send-btn {
+        padding: 9px 18px;
+        background: #374151;
+        color: #fff;
+        border: none;
+        border-radius: 8px;
+        font-size: 13.5px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background 0.15s;
+        white-space: nowrap;
+        align-self: flex-end;
+      }
+      .send-btn:hover {
+        background: #111827;
+      }
+      .send-btn:disabled {
+        background: #d1d5db;
+        cursor: not-allowed;
+      }
+
+      /* Sample queries panel */
+      .sample-queries {
+        padding: 0 18px 8px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .sample-q {
+        background: #f3f4f6;
+        border: 1px solid #e5e7eb;
+        border-radius: 6px;
+        padding: 4px 10px;
+        font-size: 11.5px;
+        color: #374151;
+        cursor: pointer;
+        transition: all 0.15s;
+      }
+      .sample-q:hover {
+        background: #e5e7eb;
+        color: #111827;
+      }
+
+      /* Loading overlay */
+      .loading-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(245, 245, 245, 0.85);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+        backdrop-filter: blur(4px);
+      }
+      .loading-spinner {
+        width: 44px;
+        height: 44px;
+        border: 3px solid #e5e7eb;
+        border-top-color: #3b82f6;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .loading-text {
+        margin-top: 14px;
+        font-size: 15px;
+        color: #6b7280;
+      }
+      .loading-sub {
+        margin-top: 4px;
+        font-size: 12px;
+        color: #9ca3af;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+      <div class="loading-spinner"></div>
+      <div class="loading-text">Building Order to Cash Graph...</div>
+      <div class="loading-sub" id="loadingSub">Connecting to server</div>
+    </div>
+
+    <!-- Top Nav -->
+    <div class="topbar">
+      <div class="topbar-toggle" title="Toggle sidebar">
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <rect x="3" y="3" width="18" height="18" rx="2" />
+          <line x1="9" y1="3" x2="9" y2="21" />
+        </svg>
+      </div>
+      <div class="topbar-breadcrumb">
+        <span>Mapping</span>
+        <span class="sep">/</span>
+        <span class="current">Order to Cash</span>
+      </div>
+    </div>
+
+    <!-- Main -->
+    <div class="main">
+      <!-- Graph Panel -->
+      <div class="graph-panel">
+        <!-- Controls -->
+        <div class="graph-controls">
+          <button
+            class="ctrl-btn light"
+            id="minimizeBtn"
+            title="Minimize/Maximize graph"
+          >
+            <svg
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+            >
+              <polyline points="8 3 3 3 3 8" />
+              <polyline points="21 8 21 3 16 3" />
+              <polyline points="3 16 3 21 8 21" />
+              <polyline points="16 21 21 21 21 16" />
+            </svg>
+            Minimize
+          </button>
+          <button class="ctrl-btn dark" id="overlayBtn" title="Toggle overlay">
+            <svg
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M12 20h9" />
+              <path
+                d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"
+              />
+            </svg>
+            Hide Granular Overlay
+          </button>
+        </div>
+
+        <!-- Stats -->
+        <div class="stats-bar" id="statsBar"></div>
+
+        <!-- D3 SVG -->
+        <svg id="graph-svg"></svg>
+
+        <!-- Node Tooltip -->
+        <div class="node-tooltip" id="nodeTooltip">
+          <button class="tooltip-close" id="tooltipClose">✕</button>
+          <div class="tooltip-title" id="ttTitle">Entity</div>
+          <div id="ttBody"></div>
+        </div>
+
+        <!-- Legend -->
+        <div class="legend">
+          <div class="legend-title">Entity Types</div>
+          <div class="legend-item">
+            <div class="legend-dot" style="background: #3b82f6"></div>
+            Sales Order / Billing / Delivery
+          </div>
+          <div class="legend-item">
+            <div class="legend-dot" style="background: #f87171"></div>
+            Items / Journal Entries
+          </div>
+          <div class="legend-item">
+            <div class="legend-dot" style="background: #10b981"></div>
+            Customers
+          </div>
+          <div class="legend-item">
+            <div class="legend-dot" style="background: #a78bfa"></div>
+            Products
+          </div>
+        </div>
+      </div>
+
+      <!-- Chat Panel -->
+      <div class="chat-panel">
+        <div class="chat-header">
+          <div class="chat-header-title"><strong>Chat with Graph</strong></div>
+          <div class="chat-header-sub">Order to Cash</div>
+        </div>
+
+        <div class="chat-messages" id="chatMessages">
+          <!-- Welcome message injected by JS -->
+        </div>
+
+        <!-- Sample queries -->
+        <div class="sample-queries" id="sampleQueries">
+          <div class="sample-q" onclick="askSample(this)">
+            Top billed products
+          </div>
+          <div class="sample-q" onclick="askSample(this)">
+            Incomplete order flows
+          </div>
+          <div class="sample-q" onclick="askSample(this)">
+            Show all customers
+          </div>
+          <div class="sample-q" onclick="askSample(this)">
+            Recent deliveries
+          </div>
+          <div class="sample-q" onclick="askSample(this)">
+            Trace billing 90504298
+          </div>
+        </div>
+
+        <div class="chat-footer">
+          <div class="status-row">
+            <div class="status-dot"></div>
+            <span><strong>Dodge AI</strong> is awaiting instructions</span>
+          </div>
+          <div class="input-row">
+            <textarea
+              class="chat-input"
+              id="chatInput"
+              rows="1"
+              placeholder="Analyze anything..."
+              onkeydown="handleKey(event)"
+              oninput="autoResize(this)"
+            ></textarea>
+            <button class="send-btn" id="sendBtn" onclick="sendQuery()">
+              Send
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // ── Configuration ────────────────────────────────────────────────────────────
+      // ── API Configuration ───────────────────────────────────────────────────
+      // Use environment variable from .env or Vercel deployment
+      // Priority: window.__CONFIG__ (from config.js) → localhost fallback
+      let API_BASE =
+        window.__CONFIG__?.api_base ||
+        `http://${window.location.hostname}:8000`;
+
+      console.log("🔍 API Configuration:");
+      console.log("  Config loaded:", window.__CONFIG__);
+      console.log("  API_BASE:", API_BASE);
+      console.log("  Hostname:", window.location.hostname);
+
+      let graphData = null;
+      let simulation = null;
+      let conversationHistory = [];
+      let showOverlay = true;
+      let pinnedTooltip = null;
+      let highlightedNodes = new Set();
+      let currentQueryPopup = null;
+
+      // ── Init ─────────────────────────────────────────────────────────────────────
+      async function init() {
+        updateLoadingSub("Loading graph data...");
+        addWelcomeMessage();
+
+        try {
+          // Load stats
+          console.log("📊 Fetching stats from:", `${API_BASE}/api/stats`);
+          const statsResp = await fetch(`${API_BASE}/api/stats`);
+          if (!statsResp.ok)
+            throw new Error(`Stats API returned ${statsResp.status}`);
+          const stats = await statsResp.json();
+          renderStatsBar(stats);
+
+          // Load graph
+          updateLoadingSub("Building force graph...");
+          console.log("📈 Fetching graph from:", `${API_BASE}/api/graph`);
+          const graphResp = await fetch(`${API_BASE}/api/graph`);
+          if (!graphResp.ok)
+            throw new Error(`Graph API returned ${graphResp.status}`);
+          graphData = await graphResp.json();
+          renderGraph(graphData);
+
+          document.getElementById("loadingOverlay").style.display = "none";
+        } catch (err) {
+          console.error("❌ Init Error:", err);
+          updateLoadingSub(
+            "⚠️ Could not connect to backend. Make sure the server is running on port 8000.",
+          );
+          console.error(err);
+        }
+      }
+
+      function updateLoadingSub(msg) {
+        document.getElementById("loadingSub").textContent = msg;
+      }
+
+      function renderStatsBar(stats) {
+        const bar = document.getElementById("statsBar");
+        const items = [
+          { label: "Nodes", val: stats.graph_nodes },
+          { label: "Edges", val: stats.graph_edges },
+          { label: "Orders", val: stats.sales_orders },
+          { label: "Customers", val: stats.customers },
+        ];
+        bar.innerHTML = items
+          .map(
+            (i) =>
+              `<div class="stat-pill">${i.label}: <span>${i.val?.toLocaleString() ?? "–"}</span></div>`,
+          )
+          .join("");
+      }
+
+      // ── D3 Force Graph ───────────────────────────────────────────────────────────
+      function renderGraph(data) {
+        const svg = d3.select("#graph-svg");
+        const container = document.querySelector(".graph-panel");
+        const W = container.clientWidth;
+        const H = container.clientHeight;
+
+        svg.selectAll("*").remove();
+
+        const g = svg.append("g");
+
+        // Zoom
+        const zoom = d3
+          .zoom()
+          .scaleExtent([0.1, 6])
+          .on("zoom", (e) => {
+            g.attr("transform", e.transform);
+            if (pinnedTooltip) hideTooltip();
+          });
+        svg.call(zoom);
+
+        // Links
+        const link = g
+          .append("g")
+          .attr("class", "links")
+          .selectAll("line")
+          .data(data.links)
+          .join("line")
+          .attr("class", "link")
+          .style("display", showOverlay ? null : "none");
+
+        // Node groups
+        const node = g
+          .append("g")
+          .attr("class", "nodes")
+          .selectAll("g")
+          .data(data.nodes)
+          .join("g")
+          .attr("class", "node")
+          .attr("data-id", (d) => d.id)
+          .call(
+            d3
+              .drag()
+              .on("start", dragStart)
+              .on("drag", dragged)
+              .on("end", dragEnd),
+          );
+
+        // Circles
+        node
+          .append("circle")
+          .attr("r", (d) => d.size || 4)
+          .attr("fill", (d) => getNodeColor(d))
+          .attr("fill-opacity", 0.85)
+          .attr("stroke", (d) => getNodeStroke(d))
+          .attr("stroke-width", 1.2);
+
+        // Hover/click
+        node
+          .on("mouseover", (event, d) => {
+            if (!pinnedTooltip) showTooltip(event, d, false);
+          })
+          .on("mouseout", () => {
+            if (!pinnedTooltip) hideTooltip();
+          })
+          .on("click", (event, d) => {
+            event.stopPropagation();
+            pinnedTooltip = d;
+            showTooltip(event, d, true);
+          });
+
+        // Click background to unpin
+        svg.on("click", () => {
+          pinnedTooltip = null;
+          hideTooltip();
+        });
+
+        // Force simulation
+        simulation = d3
+          .forceSimulation(data.nodes)
+          .force(
+            "link",
+            d3
+              .forceLink(data.links)
+              .id((d) => d.index)
+              .distance((d) => 60)
+              .strength(0.6),
+          )
+          .force("charge", d3.forceManyBody().strength(-120).distanceMax(300))
+          .force("center", d3.forceCenter(W / 2, H / 2))
+          .force(
+            "collision",
+            d3.forceCollide().radius((d) => (d.size || 4) + 2),
+          )
+          .on("tick", () => {
+            link
+              .attr("x1", (d) => d.source.x)
+              .attr("y1", (d) => d.source.y)
+              .attr("x2", (d) => d.target.x)
+              .attr("y2", (d) => d.target.y);
+            node.attr("transform", (d) => `translate(${d.x},${d.y})`);
+          });
+
+        // Overlay toggle
+        window._link = link;
+
+        // Initial zoom-to-fit after settling
+        setTimeout(() => {
+          const bounds = g.node().getBBox();
+          if (bounds.width > 0) {
+            const scale = 0.85 / Math.max(bounds.width / W, bounds.height / H);
+            const tx = (W - scale * (2 * bounds.x + bounds.width)) / 2;
+            const ty = (H - scale * (2 * bounds.y + bounds.height)) / 2;
+            svg.call(
+              zoom.transform,
+              d3.zoomIdentity.translate(tx, ty).scale(scale),
+            );
+          }
+        }, 2500);
+      }
+
+      function getNodeColor(d) {
+        const colors = {
+          Customer: "#10b981",
+          SalesOrder: "#3b82f6",
+          SalesOrderItem: "#f87171",
+          Delivery: "#60a5fa",
+          DeliveryItem: "#fca5a5",
+          BillingDoc: "#6366f1",
+          BillingItem: "#c4b5fd",
+          JournalEntry: "#f97316",
+          Product: "#a78bfa",
+        };
+        return colors[d.type] || "#9ca3af";
+      }
+
+      function getNodeStroke(d) {
+        if (highlightedNodes.has(d.id)) return "#f59e0b";
+        const c = getNodeColor(d);
+        return d3.color(c).darker(0.5).toString();
+      }
+
+      // Drag handlers
+      function dragStart(event, d) {
+        if (!event.active) simulation.alphaTarget(0.3).restart();
+        d.fx = d.x;
+        d.fy = d.y;
+      }
+      function dragged(event, d) {
+        d.fx = event.x;
+        d.fy = event.y;
+      }
+      function dragEnd(event, d) {
+        if (!event.active) simulation.alphaTarget(0);
+        d.fx = null;
+        d.fy = null;
+      }
+
+      // ── Tooltip ──────────────────────────────────────────────────────────────────
+      function showTooltip(event, d, pinned) {
+        const tt = document.getElementById("nodeTooltip");
+        document.getElementById("ttTitle").textContent = d.entity || d.type;
+
+        const meta = d.metadata || {};
+        const entries = Object.entries(meta);
+        const SHOW_MAX = 14;
+        const shown = entries.slice(0, SHOW_MAX);
+        const hidden = entries.length > SHOW_MAX;
+
+        let html = `<div class="tooltip-row"><span class="tooltip-key">Entity:</span><span class="tooltip-val">${d.entity || d.type}</span></div>`;
+        for (const [k, v] of shown) {
+          if (!v || v === "None" || v === "") continue;
+          html += `<div class="tooltip-row"><span class="tooltip-key">${k}:</span><span class="tooltip-val">${v}</span></div>`;
+        }
+        if (hidden) {
+          html += `<div class="tooltip-hidden">Additional fields hidden for readability</div>`;
+        }
+        html += `<div class="tooltip-connections">Connections: ${d.connections ?? 0}</div>`;
+
+        document.getElementById("ttBody").innerHTML = html;
+
+        // Position - place on right side so highlighted nodes remain visible on left
+        const panel = document.querySelector(".graph-panel");
+        const rect = panel.getBoundingClientRect();
+
+        const tooltipWidth = 350;
+        const tooltipHeight = 450; // Increased height
+        const minTopMargin = 500; // Bigger gap from navbar
+        const padding = 20; // Right side padding
+
+        // Position on right side, keeping highlighted nodes visible on left
+        let x = panel.clientWidth - tooltipWidth - padding;
+        // Force dialog below navbar - always use minTopMargin
+        let y = minTopMargin;
+
+        // Ensure it doesn't go off screen (fallback to left if needed)
+        if (x < 0) x = padding;
+        if (y + tooltipHeight > panel.clientHeight) {
+          y = panel.clientHeight - tooltipHeight - 10;
+        }
+
+        tt.style.left = `${x}px`;
+        tt.style.top = `${y}px`;
+        tt.classList.add("visible");
+
+        // Draw connecting lines from highlighted nodes to dialog box
+        drawLinkLinesToDialog(x, y, tooltipWidth, tooltipHeight);
+      }
+
+      function drawLinkLinesToDialog(
+        dialogX,
+        dialogY,
+        dialogWidth,
+        dialogHeight,
+      ) {
+        // Remove previous connection lines
+        d3.selectAll(".node-to-dialog-line").remove();
+
+        const svg = d3.select("#graph-svg");
+        const g = svg.select("g");
+        const panel = document.querySelector(".graph-panel");
+
+        // Get SVG and panel positions
+        const svgRect = svg.node().getBoundingClientRect();
+        const panelRect = panel.getBoundingClientRect();
+
+        // Get current transform of the graph
+        const transform = d3.zoomTransform(svg.node());
+        const k = transform.k;
+        const tx = transform.x;
+        const ty = transform.y;
+
+        // Dialog center point in panel coordinates
+        const dialogCenterPanelX = dialogX + dialogWidth / 2;
+        const dialogCenterPanelY = dialogY + dialogHeight / 2;
+
+        // Convert dialog position to screen coordinates relative to SVG
+        const dialogScreenX =
+          panelRect.left + dialogCenterPanelX - svgRect.left;
+        const dialogScreenY = panelRect.top + dialogCenterPanelY - svgRect.top;
+
+        // Convert to graph coordinates
+        const graphDialogX = (dialogScreenX - tx) / k;
+        const graphDialogY = (dialogScreenY - ty) / k;
+
+        // Draw connecting lines from each highlighted node to dialog
+        d3.selectAll(".node").each(function (d) {
+          if (highlightedNodes.has(d.id)) {
+            // Draw thick dashed line from node to dialog
+            g.insert("line", ":first-child")
+              .attr("class", "node-to-dialog-line")
+              .attr("x1", d.x)
+              .attr("y1", d.y)
+              .attr("x2", graphDialogX)
+              .attr("y2", graphDialogY)
+              .attr("stroke", "#f59e0b")
+              .attr("stroke-width", 3)
+              .attr("stroke-dasharray", "8,4")
+              .attr("opacity", 0.8)
+              .attr("pointer-events", "none");
+          }
+        });
+      }
+
+      function hideTooltip() {
+        document.getElementById("nodeTooltip").classList.remove("visible");
+        // Remove connection lines when hiding tooltip
+        d3.selectAll(".node-to-dialog-line").remove();
+      }
+
+      document.getElementById("tooltipClose").onclick = () => {
+        pinnedTooltip = null;
+        hideTooltip();
+      };
+
+      // ── Graph Controls ────────────────────────────────────────────────────────────
+      document.getElementById("overlayBtn").onclick = () => {
+        showOverlay = !showOverlay;
+        const btn = document.getElementById("overlayBtn");
+        if (window._link) {
+          window._link.style("display", showOverlay ? null : "none");
+        }
+        btn.textContent = showOverlay
+          ? " Hide Granular Overlay"
+          : " Show Granular Overlay";
+        btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg> ${showOverlay ? "Hide Granular Overlay" : "Show Granular Overlay"}`;
+      };
+
+      let isMaximized = false;
+      document.getElementById("minimizeBtn").onclick = () => {
+        isMaximized = !isMaximized;
+        const cp = document.querySelector(".chat-panel");
+        const btn = document.getElementById("minimizeBtn");
+
+        if (isMaximized) {
+          // Maximize: hide chat panel
+          cp.classList.add("chat-hidden");
+          btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg> Minimize`;
+        } else {
+          // Minimize: show chat panel
+          cp.classList.remove("chat-hidden");
+          btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="8 3 3 3 3 8"/><polyline points="21 8 21 3 16 3"/><polyline points="3 16 3 21 8 21"/><polyline points="16 21 21 21 21 16"/></svg> Maximize`;
+        }
+      };
+
+      // ── Highlight nodes referenced in response ───────────────────────────────────
+      function clearHighlightAndPopup() {
+        // Clear highlights
+        highlightedNodes.clear();
+        d3.selectAll(".node circle")
+          .attr("stroke", (d) => getNodeStroke(d))
+          .attr("stroke-width", 1.2)
+          .attr("r", (d) => d.size || 4);
+
+        // Close popup if open
+        if (currentQueryPopup) {
+          hideTooltip();
+          currentQueryPopup = null;
+          pinnedTooltip = null;
+        }
+      }
+
+      function highlightNodes(nodeIds) {
+        if (!nodeIds || nodeIds.length === 0) return;
+
+        // Clear previous highlights/popup
+        clearHighlightAndPopup();
+
+        console.log(
+          `highlightNodes called with ${nodeIds.length} IDs:`,
+          nodeIds,
+        );
+        highlightedNodes = new Set(nodeIds);
+        let highlightedNodesList = [];
+        let centerX = 0,
+          centerY = 0;
+
+        // Highlight all referenced nodes and collect them
+        d3.selectAll(".node").each(function (d) {
+          const isH = highlightedNodes.has(d.id);
+          if (isH) {
+            console.log(`Found matching node: ${d.id}`);
+          }
+          d3.select(this)
+            .select("circle")
+            .attr("stroke", isH ? "#f59e0b" : getNodeStroke(d))
+            .attr("stroke-width", isH ? 5 : 1.2)
+            .attr("r", isH ? (d.size || 4) * 3.8 : d.size || 4); // Even larger nodes (3.8x)
+
+          if (isH) {
+            highlightedNodesList.push({ node: d, element: this });
+            centerX += d.x;
+            centerY += d.y;
+          }
+        });
+
+        // If we found highlighted nodes, center and zoom to them
+        if (highlightedNodesList.length > 0) {
+          // Calculate center point of highlighted nodes
+          centerX /= highlightedNodesList.length;
+          centerY /= highlightedNodesList.length;
+
+          // Get graph elements
+          const svg = d3.select("#graph-svg");
+          const g = svg.select("g");
+          const W = +svg.attr("width");
+          const H = +svg.attr("height");
+
+          // Zoom level and calculate transform to CENTER the highlighted nodes
+          const zoomLevel = 2.2;
+          const k = zoomLevel;
+          // Translate so that centerX, centerY maps to the middle of the viewport
+          const x = W / 2 - centerX * k;
+          const y = H / 2 - centerY * k;
+
+          // Apply smooth transition
+          g.transition()
+            .duration(1000)
+            .attr("transform", `translate(${x},${y}) scale(${k})`);
+
+          // Show tooltip on first highlighted node after zoom completes
+          setTimeout(() => {
+            if (highlightedNodesList.length > 0) {
+              const firstNode = highlightedNodesList[0];
+              const circle = d3
+                .select(firstNode.element)
+                .select("circle")
+                .node();
+              if (!circle) return;
+
+              // Get screen position of the circle
+              const CTM = circle.getScreenCTM();
+              const screenX = CTM?.e || 0;
+              const screenY = CTM?.f || 0;
+
+              // Create mock event with screen coordinates
+              const mockEvent = {
+                clientX: screenX,
+                clientY: screenY,
+              };
+
+              // Show the tooltip as pinned
+              currentQueryPopup = firstNode.node;
+              pinnedTooltip = firstNode.node;
+              showTooltip(mockEvent, firstNode.node, true);
+            }
+          }, 1100); // Wait for zoom transition to complete
+        }
+      }
+
+      // ── Chat ──────────────────────────────────────────────────────────────────────
+      function addWelcomeMessage() {
+        appendMessage(
+          "agent",
+          `Hi! I can help you analyze the <strong>Order to Cash</strong> process.`,
+        );
+      }
+
+      function appendMessage(role, content, sql = null) {
+        const container = document.getElementById("chatMessages");
+
+        const div = document.createElement("div");
+        div.className = `msg ${role}`;
+
+        const headerDiv = document.createElement("div");
+        headerDiv.className = `msg-header ${role}`;
+
+        if (role === "agent") {
+          headerDiv.innerHTML = `<div class="msg-avatar-sm">G</div><div style="display:flex;flex-direction:column;gap:2px"><div><strong>Dodge AI</strong></div><div style="font-weight:400;color:#9ca3af">Graph Agent</div></div>`;
+        } else {
+          headerDiv.innerHTML = `<span>You</span><div class="msg-avatar-user">👤</div>`;
+        }
+
+        const bubble = document.createElement("div");
+        bubble.className = "msg-bubble";
+        bubble.innerHTML = content;
+
+        // SQL queries are never displayed in chat (internal use only)
+
+        div.appendChild(headerDiv);
+        div.appendChild(bubble);
+        container.appendChild(div);
+        container.scrollTop = container.scrollHeight;
+        return div;
+      }
+
+      function showTyping() {
+        const container = document.getElementById("chatMessages");
+        const div = document.createElement("div");
+        div.className = "msg agent";
+        div.id = "typingIndicator";
+        div.innerHTML = `
+        <div class="msg-header agent">
+          <div class="msg-avatar-sm">G</div><span><strong>Dodge AI</strong></span>
+        </div>
+        <div class="typing"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      `;
+        container.appendChild(div);
+        container.scrollTop = container.scrollHeight;
+      }
+
+      function hideTyping() {
+        const el = document.getElementById("typingIndicator");
+        if (el) el.remove();
+      }
+
+      async function sendQuery() {
+        const input = document.getElementById("chatInput");
+        const q = input.value.trim();
+        if (!q) return;
+
+        input.value = "";
+        autoResize(input);
+        document.getElementById("sendBtn").disabled = true;
+
+        // Clear previous highlights and popup before asking new query
+        clearHighlightAndPopup();
+
+        // Add user message
+        appendMessage("user", escapeHtml(q));
+
+        // Update history
+        conversationHistory.push({ role: "user", content: q });
+
+        // Show typing
+        showTyping();
+
+        try {
+          // Create abort controller with 60 second timeout
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 60000);
+
+          const resp = await fetch(`${API_BASE}/api/query`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              question: q,
+              conversation_history: conversationHistory.slice(-8),
+            }),
+            signal: controller.signal,
+          });
+
+          clearTimeout(timeoutId);
+
+          const data = await resp.json();
+          hideTyping();
+
+          const answer = data.answer || "No answer returned.";
+
+          // Add agent message (answer only, no SQL)
+          appendMessage("agent", answer.replace(/\n/g, "<br>"));
+
+          // Highlight referenced nodes
+          console.log("Full response from backend:", data);
+          if (data.nodes_referenced?.length > 0) {
+            console.log(
+              "Received nodes_referenced from backend:",
+              data.nodes_referenced,
+            );
+
+            // Check if nodes exist in graph
+            const nodeIds = new Set(graphData.nodes.map((n) => n.id));
+            data.nodes_referenced.forEach((nid) => {
+              if (!nodeIds.has(nid)) {
+                console.warn(
+                  `Node ${nid} not found in graph! Available nodes sample:`,
+                  Array.from(nodeIds).slice(0, 10),
+                );
+              }
+            });
+
+            highlightNodes(data.nodes_referenced);
+          } else {
+            console.log("No nodes_referenced in response");
+          }
+
+          // Update history
+          conversationHistory.push({ role: "assistant", content: answer });
+        } catch (err) {
+          hideTyping();
+          if (err.name === "AbortError") {
+            appendMessage(
+              "agent",
+              `⚠️ Query took too long (>60 seconds). Try a more specific question or break it into smaller queries.`,
+            );
+          } else {
+            appendMessage(
+              "agent",
+              `⚠️ Error connecting to server: ${err.message}`,
+            );
+          }
+        }
+
+        document.getElementById("sendBtn").disabled = false;
+        input.focus();
+      }
+
+      function handleKey(e) {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          sendQuery();
+        }
+      }
+
+      function autoResize(el) {
+        el.style.height = "auto";
+        el.style.height = Math.min(el.scrollHeight, 120) + "px";
+      }
+
+      function escapeHtml(str) {
+        return str
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
+      }
+
+      function askSample(el) {
+        const q = el.textContent;
+        document.getElementById("chatInput").value = q;
+        sendQuery();
+      }
+
+      // Start
+      init();
+    </script>
+  </body>
+</html>
